@@ -1,0 +1,111 @@
+blueprint:
+  name: Garage Automation
+  description: automate car doors and man doors with presence and mqtt
+  domain: automation
+  author: Mark Ross
+
+  input:
+    esp_device:
+      name: ESP Presense Sensor
+      description: "person presense sensor"
+      selector:
+        entity:
+          domain: sensor
+          multiple: true
+
+mode: single
+
+trigger:
+  - platform: state
+    entity_id:
+      - switch.rav4
+    to: "on"
+    id: "on"
+  - platform: state
+    entity_id:
+      - switch.rav4
+    to: unavailable
+    id: unavailable
+condition:
+  - condition: and
+    conditions:
+      - condition: state
+        entity_id: switch.visitors
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.garage_override
+        state: "off"
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id:
+              - "on"
+        sequence:
+          - if:
+              - condition: state
+                entity_id: cover.green_opener
+                state: closed
+            then:
+              - service: cover.open_cover
+                data: {}
+                target:
+                  entity_id: cover.green_opener
+              - service: lock.unlock
+                data: {}
+                target:
+                  entity_id: lock.garage_door
+  - choose:
+      - conditions:
+          - condition: trigger
+            id:
+              - unavailable
+        sequence:
+          - repeat:
+              sequence:
+                - if:
+                    - condition: and
+                      conditions:
+                        - condition: not
+                          conditions:
+                            - condition: state
+                              entity_id: !input esp_device
+                              state: garage
+                            - condition: state
+                              entity_id: !input esp_device
+                              state: garage
+                            - condition: state
+                              entity_id: !input esp_device
+                              state: garage
+                  then:
+                    - service: lock.lock
+                      data: {}
+                      target:
+                        entity_id: lock.garage_door
+                    - if:
+                        - condition: not
+                          conditions:
+                            - condition: state
+                              entity_id: cover.green_opener
+                              state: closed
+                      then:
+                        - service: cover.close_cover
+                          data: {}
+                          target:
+                            entity_id: cover.green_opener
+                      else:
+                        - delay:
+                            hours: 0
+                            minutes: 0
+                            seconds: 30
+                            milliseconds: 0
+              until:
+                - condition: and
+                  conditions:
+                    - condition: state
+                      entity_id: cover.green_opener
+                      state: closed
+                    - condition: state
+                      entity_id: lock.garage_door
+                      state: locked
+
